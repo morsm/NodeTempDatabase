@@ -137,7 +137,7 @@ function setDateInMessage(message) {
     var time = new Date();
     message.ID = time.toISOString();
     message.Year = time.getFullYear();
-    message.Month = time.getMonth();
+    message.Month = time.getMonth() + 1;
     message.Day = time.getDate();
     message.Hour = time.getHours();
     message.Minute = time.getMinutes();
