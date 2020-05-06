@@ -1,0 +1,18 @@
+{
+  "name": "nodetempdatabase",
+  "version": "1.0.0",
+  "description": "Node.js app to write temperature values to Amazon DynamoDB",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Maarten ter Mors",
+  "license": "ISC",
+  "dependencies": {
+    "aws-sdk": "^2.670.0",
+    "body": "^5.1.0",
+    "json": "^9.0.6",
+    "promise": "^8.1.0",
+    "ssl-root-cas": "^1.3.1"
+  }
+}
