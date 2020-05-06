@@ -103,16 +103,17 @@ async function handleHttpRequest(request, response)
 
 async function handleRequest(message) 
 {
-    var time = new Date();
-    message.ID = time.toISOString();
-    message.Year = time.getFullYear();
-    message.Month = time.getMonth();
-    message.Day = time.getDate();
-    message.Hour = time.getHours();
-    message.Minute = time.getMinutes();
-    message.Second = time.getSeconds();
+    setDateInMessage(message);
 
-    // TODO: add more parameters to message
+    // If local weather fails, too bad
+    try {
+
+        await getLocalWeather(message);
+        
+    } catch (error) {
+        message.WeatherCondition = "Error: " + error;        
+    }
+
 
     var docClient = new AWS.DynamoDB.DocumentClient();
     var params = {
@@ -125,13 +126,38 @@ async function handleRequest(message)
             if (err) {
                 reject(err);
             } else {
-                console.log("Added item:", JSON.stringify(data, null, 2));
-                resolve(data);
+                console.log("Added item to database");
+                resolve(message);
             }
         });
     });
 }
 
+function setDateInMessage(message) {
+    var time = new Date();
+    message.ID = time.toISOString();
+    message.Year = time.getFullYear();
+    message.Month = time.getMonth();
+    message.Day = time.getDate();
+    message.Hour = time.getHours();
+    message.Minute = time.getMinutes();
+    message.Second = time.getSeconds();
+}
+
+async function getLocalWeather(message)
+{
+    var weather = await hippoHttpGetRequest(Config.weather_url);
+
+    message.WeatherCondition = weather.weather[0].main;
+    message.OutsideTemperature = weather.main.temp - 273.15;
+    message.OutsideHumidity = weather.main.humidity;
+
+    var sunrise = weather.sys.sunrise * 1000;
+    var sunset = weather.sys.sunset * 1000;
+    var now = Date.now();
+
+    message.SunIsUp = (now >= sunrise) && (now < sunset);
+}
 
 
 
@@ -146,8 +172,8 @@ async function hippoHttpGetRequest(url)
             path: url
         };
 
-        http.get(options, (res) => {
-            console.log("Hippotronics responds ", res.statusCode);
+        http.get(url, (res) => {
+            console.log("Service responds ", res.statusCode);
 
             if (200 == res.statusCode) 
             {

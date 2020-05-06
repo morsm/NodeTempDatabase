@@ -1,4 +1,7 @@
 {
     "database_arn": "arn:aws:dynamodb:eu-west-1:881008769714:table/Temperature",
+    "access_key": "",
+    "secret_key": "",
+    "weather_url": "http://api.openweathermap.org/data/2.5/weather?id=2759794&appid=",
     "lambda_port": 3005
 }
