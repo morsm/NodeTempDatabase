@@ -8,10 +8,9 @@ const http = require('http');
 const https = require('https');
 var Promise = require('promise');
 var bodyJson = require("body/json");
+const mysql = require('mysql');
 
 var RootCA = require("ssl-root-cas/latest");
-var AWS = require("aws-sdk");
-
 let Config = require("./config.json");
 
 
@@ -19,17 +18,14 @@ let Config = require("./config.json");
 const server = http.createServer(handleHttpRequest);
 const port = Config.lambda_port;
 
-// Setup database connection
-var wowsersItsAMadAgent = new https.Agent();
-wowsersItsAMadAgent.options.ca = RootCA.create();
-AWS.NodeHttpClient.sslAgent = wowsersItsAMadAgent;
-
-AWS.config.update({
-    region: "eu-west-1",
-    endpoint: "https://dynamodb.eu-west-1.amazonaws.com",
-    credentials: { accessKeyId: Config.access_key, secretAccessKey: Config.secret_key }
+// Open database connection
+var db = mysql.createConnection({
+    host     : Config.db_host,
+    user     : Config.db_user,
+    password : Config.db_password,
+    database : Config.db_name
   });
-  
+
 
 server.listen(port, (err) => {
     if (err) 
@@ -41,7 +37,43 @@ server.listen(port, (err) => {
 });
 
 
+
 async function handleHttpRequest(request, response)
+{
+    if (request.method == "POST") await handlePostRequest(request, response);
+    else if (request.method == "GET") await handleGetRequest(request, response);
+    else {
+        response.statusCode = 405;
+        response.statusMessage = "Only GET and POST supported";
+        response.end();
+    }
+}
+
+async function handleGetRequest(request, response)
+{
+    var params = url.parse(request.url,true).query;
+
+    // Ensure we got everyting
+    var check = ! isNaN(params.year);
+    check &= ! isNaN(params.month);
+    check &= ! isNaN(params.day);
+    check &= ! isNaN(params.hour);
+    check &= ! isNaN(params.minute);
+    check &= ! isNaN(params.durationMinutes);
+
+    if (! check)
+    {
+        response.statusCode = "401";
+        response.statusMessage = "Parameters required: year, month, day, hour, minut, durationMinutes";
+        response.end();
+        return;
+    }
+
+    // Make Amazon scan request
+    
+}
+
+async function handlePostRequest(request, response)
 {
     console.log("Request", request.method, request.url);
 
@@ -52,7 +84,6 @@ async function handleHttpRequest(request, response)
 
     try
     {
-        if (request.method != "POST") { statusMessage = "Only POST supported"; throw 405; }
         if (! request.headers["content-type"] ) { statusMessage = "No Content-Type"; throw 400; }
         if (! request.headers["content-type"].startsWith("application/json")) { statusMessage = "Has to be application/json"; throw 400; }
 
@@ -78,7 +109,7 @@ async function handleHttpRequest(request, response)
         // Synchronously process message
         try
         {
-            var responseObj = await handleRequest(message);
+            var responseObj = await handleDatabasePost(message);
 
             var responseBody = JSON.stringify(responseObj);
             console.log("Returning to caller", responseBody);
@@ -101,10 +132,8 @@ async function handleHttpRequest(request, response)
     response.end();
 }
 
-async function handleRequest(message) 
+async function handleDatabasePost(message) 
 {
-    setDateInMessage(message);
-
     // If local weather fails, too bad
     try {
 
@@ -114,41 +143,36 @@ async function handleRequest(message)
         message.WeatherCondition = "Error: " + error;        
     }
 
-
-    var docClient = new AWS.DynamoDB.DocumentClient();
-    var params = {
-        TableName: "Temperature",
-        Item: message
-    };
-
-    return new Promise((resolve, reject) => {
-        docClient.put(params, function(err, data) {
-            if (err) {
-                reject(err);
-            } else {
-                console.log("Added item to database");
-                resolve(message);
-            }
-        });
-    });
+    return insertDb(message);
 }
 
-function setDateInMessage(message) {
-    var time = new Date();
-    message.ID = time.toISOString();
-    message.Year = time.getFullYear();
-    message.Month = time.getMonth() + 1;
-    message.Day = time.getDate();
-    message.Hour = time.getHours();
-    message.Minute = time.getMinutes();
-    message.Second = time.getSeconds();
+async function insertDb(record)
+{
+    var sql = "CALL INSERT_TEMP(?, ?, ?, ?, ?, ?, ?, ?);"
+    var param = [new Date(), record.RoomTemperature, record.RelativeHumidity, 
+        record.TargetTemperature, record.OutsideTemperature, record.OutsideHumidity,
+        record.HeatingOn ? 1 : 0, record.SunIsUp ? 1 : 0];
+    
+    sql = mysql.format(sql, param);
+
+    return new Promise((resolve, reject) => {
+        db.query(sql, function (error, results, fields) {
+            if (error) 
+            {
+                reject("Error inserting into database with this statement: " + sql + "\n" + error);
+            }
+            else
+            {
+                resolve(record);
+            }
+        })
+    });
 }
 
 async function getLocalWeather(message)
 {
     var weather = await hippoHttpGetRequest(Config.weather_url);
 
-    message.WeatherCondition = weather.weather[0].main;
     message.OutsideTemperature = weather.main.temp - 273.15;
     message.OutsideHumidity = weather.main.humidity;
 
