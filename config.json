@@ -1,7 +1,8 @@
 {
-    "database_arn": "arn:aws:dynamodb:eu-west-1:881008769714:table/Temperature",
-    "access_key": "",
-    "secret_key": "",
-    "weather_url": "http://api.openweathermap.org/data/2.5/weather?id=2759794&appid=",
+    "db_host": "bedroomberry",
+    "db_user": "sh",
+    "db_password": "",
+    "db_name": "smarthome",
+    "weather_url": "",
     "lambda_port": 3005
 }

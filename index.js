@@ -5,6 +5,7 @@
 'use strict';
 
 const http = require('http');
+const url = require('url');
 const https = require('https');
 var Promise = require('promise');
 var bodyJson = require("body/json");
@@ -69,8 +70,68 @@ async function handleGetRequest(request, response)
         return;
     }
 
-    // Make Amazon scan request
+    try {
+        var responseObj = await handleDatabaseGet(params.year, params.month, params.day, params.hour, params.minute, params.durationMinutes);
+        var responseBody = JSON.stringify(responseObj);
+
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/json");
+        response.setHeader("Content-Length", responseBody.length);
+        response.write(responseBody);
+        response.end();
+    }
+    catch (err)
+    {
+        response.statusCode = 500;
+        response.statusMessage = err;
+        response.end();
+    }
+
+}
+
+async function handleDatabaseGet(year, month, day, hour, minute, duration)
+{
+    var startTime = new Date(year, month, day, hour, minute, 0, 0);
+    var sql = "CALL GET_TEMP_FULL(?,?)";
+    var param = [ startTime, duration ];
+
+    sql = mysql.format(sql, param);
+
+    return new Promise((resolve, reject) => {
+        db.query(sql, function (error, results, fields) {
+            if (error) 
+            {
+                reject("Error querying database with this statement: " + sql + "\n" + error);
+            }
+            else
+            {
+                resolve(transformDbGetResult(results[0]));
+            }
+        })
+    });
     
+}
+
+function transformDbGetResult(result)
+{
+    var returnResult = [];
+
+    result.forEach(element => {
+        var newEl = { 
+            "DateTime": element.idDateTime,
+            "RoomTemperature": element.RoomTemperature,
+            "RelativeHumidity": element.RelativeHumidity,
+            "OutsideTemperature": element.OutsideTemperature,
+            "OutsideHumidity": element.OutsideHumidity,
+            "TargetTemperature": element.TargetTemperature,
+            "SunIsUp": element.SunIsUp[0] == 1,
+            "HeatingOn": element.HeatingOn[0] == 1,
+         };
+
+         returnResult.push(newEl);
+    });
+
+    return returnResult;
 }
 
 async function handlePostRequest(request, response)
